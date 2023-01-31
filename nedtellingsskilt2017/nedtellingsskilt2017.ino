@@ -4,6 +4,7 @@
 #include <DmxSimple.h>
 
 #define BRIGHTNESS 255
+#define TESTMODE_DELAY_DURATION 500
 
 //{a,b,c,d,e,f,g}
 uint8_t segtable[10][7] = {
@@ -22,7 +23,11 @@ uint8_t segtable[10][7] = {
 //actual DMX address
 uint8_t segmap[2][7] = {{2,3,4,5,6,7,8},{11,12,13,14,15,16,17}};
 
+bool testmode = false;
+uint8_t testmode_number = 00;
+
 uint8_t days = 00;
+uint8_t hours = 00;
 
 DateTime now, uka;
 
@@ -79,9 +84,17 @@ void loop() {
   now = rtc.now();
   TimeSpan delta = TimeSpan(DateTime(uka)-DateTime(now));
   days = delta.days();
+  hours = delta.hours();
   
-  //update dmx segment map countdown
-  setsegments((uint8_t)days/10,(uint8_t)days%10);
+  
+  // Update segments with new data
+  if(days > 0){
+    setsegments((uint8_t)days/10,(uint8_t)days%10);
+  }
+  else{
+    setsegments((uint8_t)hours/10,(uint8_t)hours%10);
+  }
+
   
   //update terminal:
   if (Serial.available()){
@@ -117,19 +130,42 @@ void setsegments(uint8_t seg1, uint8_t seg2)
   }
 }
 
+void testMode() // Repeatedly asks user for number and sets segments to given number.
+{
+  testmode = true;
+  while(testmode){
+    Serial.println("Set testmode number (-1 to end testmode. -99 to count through all numbers): ");
+    int16_t n = Serial.parseInt();
+
+    if(n == -1){
+      testmode = false;
+    }
+    else if(n == -99){  // Count from 0 through 99.
+      for(int i = 0; i < 100; i++){
+        setsegments((uint8_t)i/10, (uint8_t)i%10);
+        delay(TESTMODE_DELAY_DURATION);
+      }
+    }
+    else{
+      setsegments((uint8_t)n/10,(uint8_t)n%10);
+    }
+
+  }
+}
+
 void printMode()
 {
   Serial.println();
   switch (Serial.read()){ 
-  case '?': 
-    Serial.println("now: ");
-    printDateTime(&now);
-  
-    Serial.println("uka: ");
-    printDateTime(&uka);
+    case '?': 
+      Serial.println("now: ");
+      printDateTime(&now);
+    
+      Serial.println("uka: ");
+      printDateTime(&uka);
 
-    Serial.println("Days left:");
-    Serial.print(days,DEC);
+      Serial.println("Days left:");
+      Serial.print(days,DEC);
     break;
     case 'n':
       Serial.println("Set time:");
@@ -147,7 +183,10 @@ void printMode()
     case '\r':
     break;
     case 'h':
-    Serial.println("?: check data\nn: set RTC\nu: set uka");
+      Serial.println("?: check data\nn: set RTC\nu: set uka\nt: testmode");
+    break;
+    case 't':
+      testMode();
     break;
     default:
     Serial.println("'h' for help?");
